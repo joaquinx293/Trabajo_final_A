@@ -5,44 +5,124 @@
 #include <algorithm>
 #include <map>
 #include <sstream>
-#include <set>  // Asegúrate de incluir <set>
-#include <cstdlib>  // Para rand() y srand()
-#include <ctime>    // Para time()
+#include <set>  
+#include <cstdlib> 
+#include <ctime>    
 
+
+/// agregar prints para ver el camino atomar 
 class NeedlemanWunsch {
+
 private:
     std::string sequence1, sequence2;
     std::vector<std::vector<int>> scoreMatrix;
     std::map<std::pair<char, char>, int> matchMatrix;
-    int gapPenalty;
+    int gapPenalty =-2;
     
-    void initializeScoreMatrix() {
-        int rows = sequence1.length() + 1;
-        int cols = sequence2.length() + 1;
-        
-        scoreMatrix.resize(rows, std::vector<int>(cols, 0));
+ void initializeScoreMatrix() {
+    int rows = sequence1.length() + 1;
+    int cols = sequence2.length() + 1;
     
-        for(int i = 1; i < rows; i++) {
-            scoreMatrix[i][0] = scoreMatrix[i-1][0] + gapPenalty;
-        }
-        for(int j = 1; j < cols; j++) {
-            scoreMatrix[0][j] = scoreMatrix[0][j-1] + gapPenalty;
+    scoreMatrix.resize(rows, std::vector<int>(cols, 0));
+    
+    // Inicializa la primera columna (con valores de penalización de gaps)
+    for(int i = 1; i < rows; i++) {
+        scoreMatrix[i][0] = scoreMatrix[i-1][0] + gapPenalty;
+    }
+    
+    // Inicializa la primera fila (con valores de penalización de gaps)
+    for(int j = 1; j < cols; j++) {
+        scoreMatrix[0][j] = scoreMatrix[0][j-1] + gapPenalty;
+    }
+}
+
+void printPathOnMatrix(const std::vector<std::pair<int, int>>& path) const {
+    // Crear una copia de la matriz para mostrar el camino
+    std::vector<std::vector<std::string>> visualMatrix(scoreMatrix.size(),
+                                                       std::vector<std::string>(scoreMatrix[0].size(), " "));
+
+    // Llenar la matriz con los valores de scoreMatrix
+    for (size_t i = 0; i < scoreMatrix.size()-1; ++i) {
+        for (size_t j = 0; j < scoreMatrix[i].size()-1; ++j) {
+            visualMatrix[i][j] = std::to_string(scoreMatrix[i][j]);
         }
     }
+
+    // Marcar el camino con un asterisco
+    for (const auto& [row, col] : path) {
+        visualMatrix[row][col] = "*";
+    }
+
+    // Imprimir las etiquetas de las columnas (sequence2)
+    std::cout << " \t";
+    for (char c : sequence2) {
+        std::cout << c << "\t";
+    }
+    std::cout << std::endl;
+
+    // Imprimir la matriz visual con etiquetas de filas (sequence1)
+    for (size_t i = 0; i < visualMatrix.size(); ++i) {
+        if (i > 0) 
+            std::cout << sequence1[i - 1] << "\t";  // Etiqueta de fila
+        else 
+            std::cout << " \t";
+
+        for (const auto& cell : visualMatrix[i]) {
+            std::cout << cell << "\t";
+        }
+        std::cout << std::endl;
+    }
+}
+
     
     void fillScoreMatrix() {
-        for(int i = 1; i <= sequence1.length(); i++) {
-            for(int j = 1; j <= sequence2.length(); j++) {
-                int match = scoreMatrix[i-1][j-1] + 
-                    matchMatrix[{sequence1[i-1], sequence2[j-1]}];
-                int delete_gap = scoreMatrix[i-1][j] + gapPenalty;
-                int insert_gap = scoreMatrix[i][j-1] + gapPenalty;
-                
-                // Modificación aquí:
-                scoreMatrix[i][j] = std::max(match, std::max(delete_gap, insert_gap));
-            }
+    for (int i = 1; i <= sequence1.length(); i++) {
+        for (int j = 1; j <= sequence2.length(); j++) {
+            
+            int match_mismatch = scoreMatrix[i - 1][j - 1] + (sequence1[i - 1] == sequence2[j - 1] ? 1 : -1); 
+            int gap_sequence2 = scoreMatrix[i - 1][j] + gapPenalty;
+            int gap_sequence1 = scoreMatrix[i][j - 1] + gapPenalty;
+            
+            scoreMatrix[i][j] = std::max(match_mismatch,std::max(gap_sequence2, gap_sequence1));
         }
     }
+}
+   std::pair<std::string, std::string> align() {
+    std::string aligned1, aligned2;
+    int i = sequence1.length();
+    int j = sequence2.length();
+    
+    // Vector para almacenar el camino recorrido
+    std::vector<std::pair<int, int>> path;
+
+    while (i > 0 || j > 0) {
+     // Almacenar la posición actual en el camino
+        path.emplace_back(i, j); 
+
+        if (i > 0 && j > 0 && scoreMatrix[i][j] == scoreMatrix[i-1][j-1] + (sequence1[i-1] == sequence2[j-1] ? 1 : -1)) {
+            aligned1 = sequence1[i-1] + aligned1;
+            aligned2 = sequence2[j-1] + aligned2;
+            i--; j--;
+        } else if (i > 0 && scoreMatrix[i][j] == scoreMatrix[i-1][j] + gapPenalty) {
+            aligned1 = sequence1[i-1] + aligned1;
+            aligned2 = '-' + aligned2;
+            i--;
+        } else {
+            aligned1 = '-' + aligned1;
+            aligned2 = sequence2[j-1] + aligned2;
+            j--;
+        }
+    }
+
+    path.emplace_back(i, j); // Añadir la posición inicial (0, 0)
+
+    // Imprimir el camino en forma de matriz
+    std::cout << "\nCamino recorrido (Visualizado en la matriz):\n";
+    printPathOnMatrix(path);
+
+    return {aligned1, aligned2};
+}
+
 
 public:
     NeedlemanWunsch(const std::string& seq1, const std::string& seq2, int gap_penalty) 
@@ -60,40 +140,11 @@ public:
             int score;
             if (iss >> c1 >> c2 >> score) {
                 matchMatrix[{c1, c2}] = score;
-                matchMatrix[{c2, c1}] = score;  // Aseguramos que la relación sea simétrica
-                std::cout << "Leído: " << c1 << " " << c2 << " " << score << "\n";  // Para depuración
+                matchMatrix[{c2, c1}] = score;  
             }
         }
     }
 
-    std::pair<std::string, std::string> align() {
-        initializeScoreMatrix();
-        fillScoreMatrix();
-        std::string aligned1, aligned2;
-        int i = sequence1.length();
-        int j = sequence2.length();
-        while (i > 0 || j > 0) {
-            if (i > 0 && j > 0 && scoreMatrix[i][j] == scoreMatrix[i-1][j-1] + 
-                matchMatrix[{sequence1[i-1], sequence2[j-1]}]) {
-                aligned1 = sequence1[i-1] + aligned1;
-                aligned2 = sequence2[j-1] + aligned2;
-                i--; j--;
-            }
-            else if (i > 0 && scoreMatrix[i][j] == scoreMatrix[i-1][j] + gapPenalty) {
-                aligned1 = sequence1[i-1] + aligned1;
-                aligned2 = '-' + aligned2;
-                i--;
-            }
-            else {
-                aligned1 = '-' + aligned1;
-                aligned2 = sequence2[j-1] + aligned2;
-                j--;
-            }
-        }
-        
-        return {aligned1, aligned2};
-    }
-    
     void generateDotFile(const std::string& aligned1, const std::string& aligned2, 
                          const std::string& outputFile) {
         std::ofstream file(outputFile);
@@ -111,7 +162,6 @@ public:
             file << "            <TD>" << c << "</TD>\n";
         }
         file << "        </TR>\n";
-        
         file << "        </TABLE>\n";
         file << "    >];\n";
         file << "}\n";
@@ -119,43 +169,62 @@ public:
         file.close();
     }
 
-    // Nueva función para escribir la matriz de emparejamiento con puntajes aleatorios
-    void generatePairwiseScoresFile(const std::string& outputFile) {
-        std::ofstream file(outputFile);
-
-        // Inicializa la semilla de rand() con el tiempo actual para obtener resultados aleatorios diferentes
-        srand(static_cast<unsigned>(time(0)));
-
-        // Usar un conjunto para evitar duplicados, asegurándonos de manejar (A, G) igual que (G, A)
-        std::set<std::pair<char, char>> processedPairs;
-
-        // Función para generar puntajes aleatorios entre -3 y 3
-        auto generateRandomScore = []() -> int {
-            return rand() % 7 - 9;  // Genera un número entre -3 y 3
-        };
-
-        // Iterar sobre todas las combinaciones posibles de caracteres en sequence1 y sequence2
-        for (char c1 : sequence1) {
-            for (char c2 : sequence2) {
-                std::pair<char, char> pair = {std::min(c1, c2), std::max(c1, c2)};
-                
-                // Verificar si ya se procesó el par
-                if (processedPairs.find(pair) == processedPairs.end()) {
-                    int scoreValue = generateRandomScore();
-                    file << pair.first << " " << pair.second << " " << scoreValue << "\n";
-                    processedPairs.insert(pair);
-                }
-            }
-        }
-
-        file.close();
-    }
-
     int getFinalScore() const {
         return scoreMatrix[sequence1.length()][sequence2.length()];
     }
+
+    void alignAndPrint() {
+        // Llenar la matriz de puntuación
+        initializeScoreMatrix();
+        fillScoreMatrix();
+
+        // Imprime la matriz de puntuación (programación dinámica)
+        std::cout << "Matriz de programación dinámica:\n";
+        printLabeledMatrix();
+
+        // Obtén el alineamiento óptimo a partir de la matriz
+        auto [aligned1, aligned2] = align();  // Usamos la función ya implementada 'align'
+
+        // Imprime el alineamiento óptimo
+        std::cout << "\nAlineamiento óptimo:\n" << aligned1 << "\n" << aligned2 << std::endl;
+
+        // Imprime el puntaje final
+        std::cout << "Puntaje final: " << getFinalScore() << std::endl;
+
+        // Opcional: exporta el alineamiento a un archivo
+        generateDotFile(aligned1, aligned2, "resultado.dot");
+        if (system("dot -Tpng resultado.dot -o resultado.png") != 0) {
+            std::cerr << "Error al generar la imagen con Graphviz.\n";
+        }
+    }
+
+   void printLabeledMatrix() const {
+    // Imprime el encabezado con los caracteres de sequence2
+    std::cout << "\t";  
+    for (char c : sequence2) {
+        std::cout << c << "\t";
+    }
+    std::cout << std::endl;
+
+    // Imprime las filas de la matriz con las letras de sequence1
+    for (size_t i = 0; i < sequence1.length(); ++i) {  
+        if (i > 0) 
+            std::cout << sequence1[i - 1] << "\t";  
+        else 
+            std::cout << " " << "\t";  
+
+        // Imprime los valores de la matriz, excluyendo la fila adicional innecesaria
+        for (size_t j = 0; j < sequence2.length(); ++j) {  
+            std::cout << scoreMatrix[i][j] << "\t";
+        }
+        std::cout << std::endl;
+    }
+}
+
+
 };
 
+// Función main para probar el código
 int main(int argc, char* argv[]) {
     if (argc < 9) {
         std::cerr << "Uso: ./programa -C1 <archivo1> -C2 <archivo2> -U <archivo_matriz> -V <gap_penalty>\n";
@@ -173,48 +242,30 @@ int main(int argc, char* argv[]) {
             try {
                 gapPenalty = std::stoi(argv[i+1]);
             } catch (...) {
-                std::cerr << "Error: el valor de gap penalty no es válido.\n";
+                std::cerr << "Error: El valor de la penalización debe ser un número entero.\n";
                 return 1;
             }
         }
     }
 
+
+    // Cargar secuencias
     std::ifstream file1(seq1File), file2(seq2File);
     if (!file1.is_open() || !file2.is_open()) {
-        std::cerr << "Error al abrir los archivos de las cadenas.\n";
+        std::cerr << "Error al abrir los archivos de secuencias.\n";
         return 1;
     }
-
-    std::string sequence1, sequence2;
-    std::getline(file1, sequence1);
-    std::getline(file2, sequence2);
-
-    // Imprimir secuencias leídas para depuración
-    std::cout << "Secuencia 1: " << sequence1 << "\n";
-    std::cout << "Secuencia 2: " << sequence2 << "\n";
-
-    try {
-        NeedlemanWunsch nw(sequence1, sequence2, gapPenalty);
-        nw.loadMatchMatrix(matchMatrixFile);
-
-        auto [aligned1, aligned2] = nw.align();
-
-        std::cout << "Puntaje final: " << nw.getFinalScore() << "\n";
-        std::cout << "Alineamiento:\n" << aligned1 << "\n" << aligned2 << "\n";
-
-        nw.generateDotFile(aligned1, aligned2, "alignment.dot");
-
-        if (system("dot -Tpng alignment.dot -o alignment.png") != 0) {
-            std::cerr << "Error al generar la imagen con Graphviz.\n";
-        }
-
-        // Genera el archivo con los pares de nucleótidos y sus puntajes aleatorios
-        nw.generatePairwiseScoresFile("funU.tex");
-
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-        return 1;
-    }
-
+    std::string sequence1((std::istreambuf_iterator<char>(file1)), std::istreambuf_iterator<char>());
+    std::string sequence2((std::istreambuf_iterator<char>(file2)), std::istreambuf_iterator<char>());
+    
+    // Crear el objeto NeedlemanWunsch
+    NeedlemanWunsch nw(sequence1, sequence2, gapPenalty);
+    
+    // Cargar la matriz de emparejamiento
+    nw.loadMatchMatrix(matchMatrixFile);
+    
+    // Realizar el alineamiento y mostrar los resultados
+    nw.alignAndPrint();
+    
     return 0;
 }
